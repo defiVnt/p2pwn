@@ -71,7 +71,7 @@ protocol.type1 = true # Type 1 protocol
 methods.brute = true # Credentials bruteforce
 methods.cve-2021-33044 = true # CVE-2021-33044
 methods.cve-2021-33045 = true # CVE-2021-33045
-methods.cve-2024-39943 = true # CVE-2024-39943
+methods.uau = true # Unauthenticated addUser
 
 [brute] # Bruteforce configuration
 type1.delay = 20 # Type 1 brute attempts delay in seconds

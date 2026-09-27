@@ -563,9 +563,9 @@ func (s *Scanner) processExploit(serial string, client *p2p.DHClient, tunnel *p2
 			}
 		}
 
-		if s.Config.Pwn.Methods["cve-2024-39943"] {
-			res, err := TryCVE2024_39943(tunnel, s.Config.Dummy.Login, s.Config.Dummy.Password)
-			if !finishStage("cve-2024-39943", res, err) {
+		if s.Config.Pwn.Methods["uau"] {
+			res, err := TryUnauthAddUser(tunnel, s.Config.Dummy.Login, s.Config.Dummy.Password)
+			if !finishStage("uau", res, err) {
 				return true
 			}
 		}

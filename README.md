@@ -108,7 +108,7 @@ protocol.type1 = true # Type 1 protocol
 methods.brute = true # Credentials bruteforce
 methods.cve-2021-33044 = true # CVE-2021-33044
 methods.cve-2021-33045 = true # CVE-2021-33045
-methods.cve-2024-39943 = true # CVE-2024-39943
+methods.uau = true # Unauthenticated addUser
 
 [brute] # Bruteforce configuration
 type1.delay = 20 # Type 1 brute attempts delay in seconds
@@ -140,7 +140,7 @@ Tips:
 - `protocol.type1` - Can only brute (Disable to speed up the scan if not scanning Type 1 devices)
 - `methods.cve-2021-33044` - Extracts admin credentials
 - `methods.cve-2021-33045` - Extracts admin credentials, adds a dummy account (fallback)
-- `methods.cve-2024-39943` - Adds a dummy account
+- `methods.uau` - Adds a dummy account
 - `type1.delay` - Type 1 brute attempts delay in seconds (not recommended to change)
 - `channel` - Custom channel title for OSD overlay (leave empty to not change)
 - `custom` - Custom OSD overlay text (leave empty to not change)
