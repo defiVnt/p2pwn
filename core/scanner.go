@@ -61,7 +61,7 @@ func NewScanner(targets []string, config *Config, threads int, outDir string, in
 	}
 }
 
-// connectTimeout returns the connection timeout from config.toml (ms)
+// return the connection timeout from config (ms)
 func (s *Scanner) connectTimeout() time.Duration {
 	timeoutMs := 5000
 	if val, err := getIntValue(s.Config.Scan.Timeout); err == nil && val > 0 {
