@@ -120,6 +120,28 @@ func buildTitleSet(vwTable, ctTable []any, channel string, lines []string) (ctOu
 	return ctOut, vwOut
 }
 
+func hasConfiguredChannelName(table []any, channel string) bool {
+	channel = normalizeOSDChannel(channel)
+	if channel == "" {
+		return false
+	}
+	found := false
+	matches := true
+	_ = walkConfigRows(table, func(row map[string]any) error {
+		value, ok := row["Name"]
+		if !ok {
+			return nil
+		}
+		name, ok := value.(string)
+		if !ok || strings.TrimSpace(name) != channel {
+			matches = false
+		}
+		found = true
+		return nil
+	})
+	return found && matches
+}
+
 func dhipGetTable(dhip *p2p.DHIPClient, name string, id int) ([]any, error) {
 	r, err := dhip.Call("configManager.getConfig", map[string]any{"name": name}, id, nil, nil)
 	if err != nil {
@@ -321,6 +343,9 @@ func newRPC2Session(tunnel *p2p.PTCPTunnel, login, pass string) (*osdSession, er
 		setBoth: func(ctOut, vwOut []any) error {
 			return rpc2MulticallSet(conn, sess, cookie, ctOut, vwOut)
 		},
+		setTable: func(name string, table []any) error {
+			return rpc2SetTable(conn, sess, cookie, name, table)
+		},
 		close: closeConn,
 	}, nil
 }
@@ -347,6 +372,9 @@ func newDHIPSession(tunnel *p2p.PTCPTunnel, port int, login, pass string) (*osdS
 		setBoth: func(ctOut, vwOut []any) error {
 			return dhipMulticallSet(dhip, ctOut, vwOut)
 		},
+		setTable: func(name string, table []any) error {
+			return dhipSetTable(dhip, name, table)
+		},
 		close: func() { dhip.Close() },
 	}, nil
 }
@@ -356,9 +384,10 @@ type cfgData struct {
 }
 
 type osdSession struct {
-	get     func(name string, id int) (*cfgData, error)
-	setBoth func(ctOut, vwOut []any) error
-	close   func()
+	get      func(name string, id int) (*cfgData, error)
+	setBoth  func(ctOut, vwOut []any) error
+	setTable func(name string, table []any) error
+	close    func()
 }
 
 func checkMulticallResult(r map[string]any) error {
@@ -428,6 +457,229 @@ func dhipMulticallSet(dhip *p2p.DHIPClient, ctOut, vwOut []any) error {
 	return checkMulticallResult(r)
 }
 
+func rpc2SetTable(conn *rpc2ConnSession, sess any, cookie, name string, table []any) error {
+	r, _, err := conn.post("/RPC2", map[string]any{
+		"method": "configManager.setConfig",
+		"params": map[string]any{"name": name, "table": table, "options": []any{}},
+		"id":     43, "session": sess,
+	}, cookie)
+	if err != nil {
+		return err
+	}
+	return checkMulticallResult(r)
+}
+
+func dhipSetTable(dhip *p2p.DHIPClient, name string, table []any) error {
+	r, err := dhip.Call("configManager.setConfig", map[string]any{
+		"name": name, "table": table, "options": []any{},
+	}, 43, nil, nil)
+	if err != nil {
+		return err
+	}
+	return checkMulticallResult(r)
+}
+
+func walkConfigRows(value any, visit func(map[string]any) error) error {
+	switch value := value.(type) {
+	case []any:
+		for _, item := range value {
+			if err := walkConfigRows(item, visit); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		if err := visit(value); err != nil {
+			return err
+		}
+		for _, item := range value {
+			if err := walkConfigRows(item, visit); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func resetConfigFields(table []any, fields ...string) error {
+	found := make(map[string]bool, len(fields))
+	err := walkConfigRows(table, func(row map[string]any) error {
+		for _, field := range fields {
+			if _, ok := row[field]; ok {
+				row[field] = 50
+				found[field] = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, field := range fields {
+		if !found[field] {
+			return fmt.Errorf("configuration has no %s field", field)
+		}
+	}
+	return nil
+}
+
+func verifyConfigFields(table []any, fields ...string) error {
+	found := make(map[string]bool, len(fields))
+	err := walkConfigRows(table, func(row map[string]any) error {
+		for _, field := range fields {
+			value, ok := row[field]
+			if !ok {
+				continue
+			}
+			matches := false
+			switch number := value.(type) {
+			case int:
+				matches = number == 50
+			case int64:
+				matches = number == 50
+			case float32:
+				matches = number == 50
+			case float64:
+				matches = number == 50
+			case json.Number:
+				parsed, err := number.Float64()
+				matches = err == nil && parsed == 50
+			}
+			if !matches {
+				return fmt.Errorf("%s read-back mismatch: got %v, want 50", field, value)
+			}
+			found[field] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, field := range fields {
+		if !found[field] {
+			return fmt.Errorf("configuration has no %s field", field)
+		}
+	}
+	return nil
+}
+
+func resetBrightnessTable(table []any) (bool, error) {
+	if err := resetConfigFields(table, "Brightness"); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func verifyBrightnessTable(table []any) error {
+	return verifyConfigFields(table, "Brightness")
+}
+
+func resetBrightnessOnPort(getTunnel func() *p2p.PTCPTunnel, port int, login, pass string) error {
+	var newSess func() (*osdSession, error)
+	if port == 80 {
+		newSess = func() (*osdSession, error) { return newRPC2Session(getTunnel(), login, pass) }
+	} else {
+		newSess = func() (*osdSession, error) { return newDHIPSession(getTunnel(), port, login, pass) }
+	}
+	s, err := newSess()
+	if err != nil {
+		return err
+	}
+	defer s.close()
+	var lastErr error
+	for _, name := range []string{"VideoColor", "VideoInOptions"} {
+		data, err := s.get(name, 44)
+		if err != nil {
+			lastErr = fmt.Errorf("get %s: %w", name, err)
+			continue
+		}
+		changed, err := resetBrightnessTable(data.nested)
+		if err != nil || !changed {
+			if err == nil {
+				err = fmt.Errorf("configuration has no brightness fields")
+			}
+			lastErr = fmt.Errorf("%s: %w", name, err)
+			continue
+		}
+		if err := s.setTable(name, data.nested); err != nil {
+			return fmt.Errorf("set %s: %w", name, err)
+		}
+		data, err = s.get(name, 45)
+		if err != nil {
+			return fmt.Errorf("verify %s: %w", name, err)
+		}
+		if err := verifyBrightnessTable(data.nested); err != nil {
+			return fmt.Errorf("verify %s: %w", name, err)
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func TryBrightnessReset(tunnel *p2p.PTCPTunnel, login, pass string) error {
+	var lastErr error
+	for _, port := range []int{5000, 37777, 80} {
+		if err := resetBrightnessOnPort(func() *p2p.PTCPTunnel { return tunnel }, port, login, pass); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("brightness reset failed on ports 5000, 37777, and 80: %w", lastErr)
+}
+
+func resetVideoControlsOnPort(tunnel *p2p.PTCPTunnel, port int, login, pass string) error {
+	var s *osdSession
+	var err error
+	if port == 80 {
+		s, err = newRPC2Session(tunnel, login, pass)
+	} else {
+		s, err = newDHIPSession(tunnel, port, login, pass)
+	}
+	if err != nil {
+		return err
+	}
+	defer s.close()
+
+	for _, config := range []struct {
+		name   string
+		fields []string
+	}{
+		{name: "VideoColor", fields: []string{"Contrast", "Saturation", "Gamma"}},
+		{name: "VideoInSharpness", fields: []string{"Sharpness"}},
+	} {
+		data, err := s.get(config.name, 46)
+		if err != nil {
+			return fmt.Errorf("get %s: %w", config.name, err)
+		}
+		if err := resetConfigFields(data.nested, config.fields...); err != nil {
+			return fmt.Errorf("reset %s: %w", config.name, err)
+		}
+		if err := s.setTable(config.name, data.nested); err != nil {
+			return fmt.Errorf("set %s: %w", config.name, err)
+		}
+		data, err = s.get(config.name, 47)
+		if err != nil {
+			return fmt.Errorf("verify %s: %w", config.name, err)
+		}
+		if err := verifyConfigFields(data.nested, config.fields...); err != nil {
+			return fmt.Errorf("verify %s: %w", config.name, err)
+		}
+	}
+	return nil
+}
+
+func TryVideoControlsReset(tunnel *p2p.PTCPTunnel, login, pass string) error {
+	var lastErr error
+	for _, port := range []int{5000, 37777, 80} {
+		if err := resetVideoControlsOnPort(tunnel, port, login, pass); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("video controls reset failed on ports 5000, 37777, and 80: %w", lastErr)
+}
+
 func verifyTitleState(label string, newSess func() (*osdSession, error), channel string, lines []string) (bool, bool) {
 	ctOK, vwOK := channel == "", len(lines) == 0
 	if ctOK && vwOK {
@@ -488,6 +740,9 @@ func applySingleShot(label string, newSess func() (*osdSession, error), channel 
 	ctD, err := s.get("ChannelTitle", 11)
 	if err != nil {
 		return fmt.Errorf("%s get ChannelTitle: %w", label, err)
+	}
+	if hasConfiguredChannelName(ctD.nested, channel) {
+		return nil
 	}
 	ctOut, vwOut := buildTitleSet(vwD.nested, ctD.nested, channel, lines)
 	if len(ctOut) == 0 && len(vwOut) == 0 {

