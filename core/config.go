@@ -44,6 +44,7 @@ type DummyConfig struct {
 
 type OverlayConfig struct {
 	Osd     bool     `toml:"osd"`
+	Reset   bool     `toml:"reset"`
 	Channel string   `toml:"channel"`
 	Custom  []string `toml:"custom"`
 }
@@ -89,6 +90,7 @@ password = "p2password" # 8-32 alphanumeric characters
 
 [overlay] # Custom overlay configuration
 osd = true # Set OSD on pwned devices
+reset = false # Reset brightness and other video controls on pwned devices
 channel = "p2pwn" # ChannelTitle
 custom = [
   "p2pwned",

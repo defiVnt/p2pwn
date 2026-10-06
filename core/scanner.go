@@ -782,15 +782,17 @@ func (s *Scanner) launchOSD(serial string, tunnel *p2p.PTCPTunnel, res *ExploitR
 		redial := func() (*p2p.PTCPTunnel, func(), bool) {
 			return s.dialFreshTunnel(serial, res)
 		}
-		if err := TryBrightnessReset(tunnel, res.Login, res.Password); err != nil {
-			DebugLogf("brightness", "%s > reset failed: %v", serial, err)
-		} else {
-			DebugLogf("brightness", "%s > reset to default", serial)
-		}
-		if err := TryVideoControlsReset(tunnel, res.Login, res.Password); err != nil {
-			DebugLogf("video", "%s > control reset failed: %v", serial, err)
-		} else {
-			DebugLogf("video", "%s > controls reset to default", serial)
+		if s.Config.Overlay.Reset {
+			if err := TryBrightnessReset(tunnel, res.Login, res.Password); err != nil {
+				DebugLogf("brightness", "%s > reset failed: %v", serial, err)
+			} else {
+				DebugLogf("brightness", "%s > reset to default", serial)
+			}
+			if err := TryVideoControlsReset(tunnel, res.Login, res.Password); err != nil {
+				DebugLogf("video", "%s > control reset failed: %v", serial, err)
+			} else {
+				DebugLogf("video", "%s > controls reset to default", serial)
+			}
 		}
 		if !applyOSD {
 			return
