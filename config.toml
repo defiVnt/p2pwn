@@ -25,14 +25,14 @@ credentials = [
 ]
 
 [dummy] # Credentials for added dummy account
-login = "p2pwn" # 5-32 alphanumeric characters
-password = "p2password" # 8-32 alphanumeric characters
+login = "defivnt" # 5-32 alphanumeric characters
+password = "defivnt1337" # 8-32 alphanumeric characters
 
 [overlay] # Custom overlay configuration
 osd = true # Set OSD on pwned devices
 reset = false # Reset brightness and other video controls on pwned devices
-channel = "p2pwn" # ChannelTitle
+channel = "defivnt" # ChannelTitle
 custom = [
-  "p2pwned",
-  "device is vulnerable"
+  "pwned",
+  "by defivnt"
 ] # CustomTitle (up to 5 lines)
