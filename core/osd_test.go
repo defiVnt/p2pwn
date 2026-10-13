@@ -83,6 +83,30 @@ func TestResetBrightnessTableWithoutBrightness(t *testing.T) {
 	}
 }
 
+func TestResetBrightnessTableResetsMask(t *testing.T) {
+	table := []any{map[string]any{"Brightness": 20, "Mask": 10}, map[string]any{"Mask": 80}}
+
+	changed, err := resetBrightnessTable(table)
+	if err != nil {
+		t.Fatalf("resetBrightnessTable() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("resetBrightnessTable() changed = false, want true")
+	}
+	if got := table[0].(map[string]any)["Brightness"]; got != 50 {
+		t.Errorf("first brightness = %v, want 50", got)
+	}
+	if got := table[0].(map[string]any)["Mask"]; got != 50 {
+		t.Errorf("first mask = %v, want 50", got)
+	}
+	if got := table[1].(map[string]any)["Mask"]; got != 50 {
+		t.Errorf("second mask = %v, want 50", got)
+	}
+	if err := verifyBrightnessTable(table); err != nil {
+		t.Fatalf("verifyBrightnessTable() error = %v", err)
+	}
+}
+
 func TestResetBrightnessTableNestedVideoColor(t *testing.T) {
 	table := []any{[]any{
 		map[string]any{"Brightness": 20, "Gamma": 100},
