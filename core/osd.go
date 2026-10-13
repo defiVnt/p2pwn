@@ -563,71 +563,14 @@ func verifyConfigFields(table []any, fields ...string) error {
 }
 
 func resetBrightnessTable(table []any) (bool, error) {
-	foundBrightness := false
-	foundMask := false
-	err := walkConfigRows(table, func(row map[string]any) error {
-		if _, ok := row["Brightness"]; ok {
-			row["Brightness"] = 50
-			foundBrightness = true
-		}
-		if _, ok := row["Mask"]; ok {
-			row["Mask"] = 50
-			foundMask = true
-		}
-		return nil
-	})
-	if err != nil {
+	if err := resetConfigFields(table, "Brightness"); err != nil {
 		return false, err
-	}
-	if !foundBrightness && !foundMask {
-		return false, fmt.Errorf("configuration has no brightness field")
 	}
 	return true, nil
 }
 
 func verifyBrightnessTable(table []any) error {
-	foundBrightness := false
-	foundMask := false
-	err := walkConfigRows(table, func(row map[string]any) error {
-		if value, ok := row["Brightness"]; ok {
-			if !matchesResetValue(value) {
-				return fmt.Errorf("Brightness read-back mismatch: got %v, want 50", value)
-			}
-			foundBrightness = true
-		}
-		if value, ok := row["Mask"]; ok {
-			if !matchesResetValue(value) {
-				return fmt.Errorf("Mask read-back mismatch: got %v, want 50", value)
-			}
-			foundMask = true
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if !foundBrightness && !foundMask {
-		return fmt.Errorf("configuration has no brightness field")
-	}
-	return nil
-}
-
-func matchesResetValue(value any) bool {
-	switch number := value.(type) {
-	case int:
-		return number == 50
-	case int64:
-		return number == 50
-	case float32:
-		return number == 50
-	case float64:
-		return number == 50
-	case json.Number:
-		parsed, err := number.Float64()
-		return err == nil && parsed == 50
-	default:
-		return false
-	}
+	return verifyConfigFields(table, "Brightness")
 }
 
 func resetBrightnessOnPort(getTunnel func() *p2p.PTCPTunnel, port int, login, pass string) error {

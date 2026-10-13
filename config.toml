@@ -33,6 +33,6 @@ osd = true # Set OSD on pwned devices
 reset = false # Reset brightness and other video controls on pwned devices
 channel = "defivnt" # ChannelTitle
 custom = [
-  "пейте чай",
-  "defivnt was here"
+  "pwned",
+  "by defivnt"
 ] # CustomTitle (up to 5 lines)
