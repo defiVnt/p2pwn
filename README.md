@@ -56,6 +56,7 @@ If doesn't exist, will be created
 Default > 100
 [-c, --config] Path to config file
 Default > config.toml
+[-s, --stealth] Don't apply OSD overlay; reset brightness, video controls, and OSD masks
 [-d, --debug] Log everything
 [-?, -h, --help] Get general help
 ```  

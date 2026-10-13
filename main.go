@@ -40,6 +40,7 @@ func printHelp() {
 	fmt.Printf("Default > 100\n")
 	fmt.Printf("[-c, --config] Path to config file\n")
 	fmt.Printf("Default > config.toml\n")
+	fmt.Printf("[-s, --stealth] Don't apply OSD overlay; reset brightness, video controls, and OSD masks\n")
 	fmt.Printf("[-d, --debug] Log everything\n")
 	fmt.Printf("[-?, -h, --help] Get general help\n")
 	enc := []byte{0xF0, 0xEC, 0xFB, 0xE7, 0xDD, 0x98, 0xF6, 0x8B, 0xCC, 0xC2, 0xDF, 0xC3, 0xDE, 0xC9, 0x85, 0xC8, 0xC4, 0xC6, 0x84, 0xDF, 0xC3, 0xCE, 0xC9, 0xCA, 0xCF, 0xC2, 0xC5, 0xDF, 0xCE, 0xCC, 0xCE, 0xD9}
@@ -79,6 +80,7 @@ func main() {
 	threads := 100
 	configPath := "config.toml"
 	debugEnabled := false
+	stealthEnabled := false
 	showHelp := false
 
 	for i := 0; i < len(args); i++ {
@@ -106,6 +108,8 @@ func main() {
 			}
 		case "-d", "--debug":
 			debugEnabled = true
+		case "-s", "--stealth":
+			stealthEnabled = true
 		case "-h", "-?", "--help":
 			showHelp = true
 		}
@@ -187,6 +191,10 @@ func main() {
 	cfg, err := core.LoadConfig(configPath, isDefaultConfig)
 	if err != nil {
 		printErrorAndExit(err.Error())
+	}
+	if stealthEnabled {
+		cfg.Overlay.Osd = false
+		cfg.Overlay.Reset = true
 	}
 
 	// Init debug logger if enabled
