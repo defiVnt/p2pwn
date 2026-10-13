@@ -145,7 +145,7 @@ Tips:
 - `type1.delay` - Type 1 brute attempts delay in seconds (not recommended to change)
 - `channel` - Custom channel title for OSD overlay (leave empty to not change)
 - `custom` - Custom OSD overlay text (leave empty to not change)
-- `reset` - Reset brightness and other video controls on pwned devices (adds device configuration requests)
+- `reset` - Reset brightness, video controls, and OSD cover masks on pwned devices (adds device configuration requests)
 
 ## Credits  
 Made by [badinteger](https://github.com/thebadinteger) `[GPL v3.0 License]`  

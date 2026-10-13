@@ -30,7 +30,7 @@ password = "defivnt1337" # 8-32 alphanumeric characters
 
 [overlay] # Custom overlay configuration
 osd = true # Set OSD on pwned devices
-reset = false # Reset brightness and other video controls on pwned devices
+reset = true # Reset brightness, video controls, and OSD cover masks on pwned devices
 channel = "defivnt" # ChannelTitle
 custom = [
   "pwned",

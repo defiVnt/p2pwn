@@ -83,6 +83,67 @@ func TestResetBrightnessTableWithoutBrightness(t *testing.T) {
 	}
 }
 
+func TestResetOSDMaskTable(t *testing.T) {
+	table := []any{map[string]any{
+		"Covers": []any{
+			map[string]any{
+				"EncodeBlend":  true,
+				"PreviewBlend": true,
+				"Rect":         []any{2843, 1864, 3864, 2890},
+			},
+			map[string]any{
+				"EncodeBlend":  true,
+				"PreviewBlend": false,
+				"Rect":         []any{2371, 4942, 4240, 6669},
+			},
+		},
+	}}
+
+	changed, err := resetOSDMaskTable(table)
+	if err != nil {
+		t.Fatalf("resetOSDMaskTable() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("resetOSDMaskTable() changed = false, want true")
+	}
+	covers := table[0].(map[string]any)["Covers"].([]any)
+	for _, rawCover := range covers {
+		cover := rawCover.(map[string]any)
+		for _, field := range []string{"EncodeBlend", "PreviewBlend"} {
+			if got := cover[field]; got != false {
+				t.Errorf("%s = %v, want false", field, got)
+			}
+		}
+	}
+	if got := covers[0].(map[string]any)["Rect"]; got == nil {
+		t.Error("cover Rect was removed")
+	}
+	if err := verifyOSDMaskTable(table); err != nil {
+		t.Errorf("verifyOSDMaskTable() error = %v", err)
+	}
+}
+
+func TestResetOSDMaskTableWithoutMaskFields(t *testing.T) {
+	_, err := resetOSDMaskTable([]any{map[string]any{
+		"Covers": []any{map[string]any{"Rect": []any{1, 2, 3, 4}}},
+	}})
+	if err == nil {
+		t.Fatal("resetOSDMaskTable() error = nil, want missing-mask-fields error")
+	}
+}
+
+func TestVerifyOSDMaskTable(t *testing.T) {
+	err := verifyOSDMaskTable([]any{map[string]any{
+		"Covers": []any{map[string]any{
+			"EncodeBlend":  false,
+			"PreviewBlend": true,
+		}},
+	}})
+	if err == nil {
+		t.Fatal("verifyOSDMaskTable() error = nil, want enabled-mask error")
+	}
+}
+
 func TestResetBrightnessTableNestedVideoColor(t *testing.T) {
 	table := []any{[]any{
 		map[string]any{"Brightness": 20, "Gamma": 100},

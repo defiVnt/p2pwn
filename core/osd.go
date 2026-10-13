@@ -627,6 +627,124 @@ func TryBrightnessReset(tunnel *p2p.PTCPTunnel, login, pass string) error {
 	return fmt.Errorf("brightness reset failed on ports 5000, 37777, and 80: %w", lastErr)
 }
 
+func resetOSDMaskTable(table []any) (bool, error) {
+	found := false
+	err := walkConfigRows(table, func(row map[string]any) error {
+		rawCovers, ok := row["Covers"]
+		if !ok {
+			return nil
+		}
+		covers, ok := rawCovers.([]any)
+		if !ok {
+			return fmt.Errorf("OSD mask Covers has unexpected type %T", rawCovers)
+		}
+		for _, rawCover := range covers {
+			cover, ok := rawCover.(map[string]any)
+			if !ok {
+				continue
+			}
+			for _, field := range []string{"EncodeBlend", "PreviewBlend"} {
+				if _, ok := cover[field]; ok {
+					cover[field] = false
+					found = true
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, fmt.Errorf("configuration has no OSD mask fields")
+	}
+	return true, nil
+}
+
+func verifyOSDMaskTable(table []any) error {
+	found := false
+	err := walkConfigRows(table, func(row map[string]any) error {
+		rawCovers, ok := row["Covers"]
+		if !ok {
+			return nil
+		}
+		covers, ok := rawCovers.([]any)
+		if !ok {
+			return fmt.Errorf("OSD mask Covers has unexpected type %T", rawCovers)
+		}
+		for _, rawCover := range covers {
+			cover, ok := rawCover.(map[string]any)
+			if !ok {
+				continue
+			}
+			for _, field := range []string{"EncodeBlend", "PreviewBlend"} {
+				value, ok := cover[field]
+				if !ok {
+					continue
+				}
+				enabled, ok := value.(bool)
+				if !ok || enabled {
+					return fmt.Errorf("%s read-back mismatch: got %v, want false", field, value)
+				}
+				found = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("configuration has no OSD mask fields")
+	}
+	return nil
+}
+
+func resetOSDMaskOnPort(tunnel *p2p.PTCPTunnel, port int, login, pass string) error {
+	var s *osdSession
+	var err error
+	if port == 80 {
+		s, err = newRPC2Session(tunnel, login, pass)
+	} else {
+		s, err = newDHIPSession(tunnel, port, login, pass)
+	}
+	if err != nil {
+		return err
+	}
+	defer s.close()
+
+	data, err := s.get("VideoWidget", 48)
+	if err != nil {
+		return fmt.Errorf("get VideoWidget: %w", err)
+	}
+	if _, err := resetOSDMaskTable(data.nested); err != nil {
+		return fmt.Errorf("reset VideoWidget: %w", err)
+	}
+	if err := s.setTable("VideoWidget", data.nested); err != nil {
+		return fmt.Errorf("set VideoWidget: %w", err)
+	}
+	data, err = s.get("VideoWidget", 49)
+	if err != nil {
+		return fmt.Errorf("verify VideoWidget: %w", err)
+	}
+	if err := verifyOSDMaskTable(data.nested); err != nil {
+		return fmt.Errorf("verify VideoWidget: %w", err)
+	}
+	return nil
+}
+
+func TryOSDMaskReset(tunnel *p2p.PTCPTunnel, login, pass string) error {
+	var lastErr error
+	for _, port := range []int{5000, 37777, 80} {
+		if err := resetOSDMaskOnPort(tunnel, port, login, pass); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("OSD mask reset failed on ports 5000, 37777, and 80: %w", lastErr)
+}
+
 func resetVideoControlsOnPort(tunnel *p2p.PTCPTunnel, port int, login, pass string) error {
 	var s *osdSession
 	var err error

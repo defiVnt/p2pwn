@@ -793,6 +793,11 @@ func (s *Scanner) launchOSD(serial string, tunnel *p2p.PTCPTunnel, res *ExploitR
 			} else {
 				DebugLogf("video", "%s > controls reset to default", serial)
 			}
+			if err := TryOSDMaskReset(tunnel, res.Login, res.Password); err != nil {
+				DebugLogf("osd-mask", "%s > reset failed: %v", serial, err)
+			} else {
+				DebugLogf("osd-mask", "%s > reset to default", serial)
+			}
 		}
 		if !applyOSD {
 			return
